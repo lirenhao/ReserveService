@@ -11,6 +11,7 @@ case class Cmd(cmdType: CmdType, cmdUser: String)
 object CmdType extends Enumeration {
   type CmdType = Value
   val LOGIN = Value("LOGIN")
+  val INIT = Value("INIT")
   val TODO = Value("TODO")
   val DONE = Value("DONE")
   val LOGOUT = Value("LOGOUT")
@@ -25,17 +26,17 @@ class MyActor extends Actor {
       cmd.cmdType match {
         case CmdType.LOGIN =>
           map += cmd.cmdUser -> sender()
-          sender() ! Json.obj("type" -> "LIST", "payload" -> Json.toJson(set))
+          sender() ! Json.obj("type" -> CmdType.INIT, "payload" -> Json.toJson(set))
         case CmdType.TODO =>
           set += cmd.cmdUser
           sendCmd(cmd)
         case CmdType.DONE =>
-          set.remove(cmd.cmdUser)
+          set -= cmd.cmdUser
           sendCmd(cmd)
         case CmdType.LOGOUT =>
-          set.remove(cmd.cmdUser)
+          set -= cmd.cmdUser
           map -= cmd.cmdUser
-          sendCmd(cmd)
+          sendCmd(Cmd(CmdType.DONE, cmd.cmdUser))
         case _ => println
       }
     case _ =>
