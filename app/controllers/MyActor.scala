@@ -25,6 +25,7 @@ class MyActor extends Actor {
     case cmd: Cmd =>
       cmd.cmdType match {
         case CmdType.LOGIN =>
+          context.watch(sender())
           map += cmd.cmdUser -> sender()
           sender() ! Json.obj("type" -> CmdType.INIT, "payload" -> Json.toJson(set))
         case CmdType.TODO =>
@@ -34,11 +35,20 @@ class MyActor extends Actor {
           set -= cmd.cmdUser
           sendCmd(cmd)
         case CmdType.LOGOUT =>
+          context.unwatch(sender())
           set -= cmd.cmdUser
           map -= cmd.cmdUser
           sendCmd(Cmd(CmdType.DONE, cmd.cmdUser))
         case _ => println
       }
+    case Terminated(ref) =>
+      map.keys
+        .filter((user) => map(user) == ref)
+        .foreach((user) => {
+          set -= user
+          map -= user
+          sendCmd(Cmd(CmdType.DONE, user))
+        })
     case _ =>
   }
 
