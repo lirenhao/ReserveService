@@ -18,7 +18,7 @@ object CmdType extends Enumeration {
 }
 
 class MyActor extends Actor {
-  private val map = mutable.HashMap.empty[String, ActorRef]
+  private val map = mutable.HashMap.empty[String, mutable.Set[ActorRef]]
   private val set = mutable.LinkedHashSet.empty[String]
 
   override def receive: Receive = {
@@ -26,7 +26,12 @@ class MyActor extends Actor {
       cmd.cmdType match {
         case CmdType.LOGIN =>
           context.watch(sender())
-          map += cmd.cmdUser -> sender()
+          map.get(cmd.cmdUser) match {
+            case Some(userSet) =>
+              map.update(cmd.cmdUser, userSet += sender())
+            case None =>
+              map += cmd.cmdUser -> mutable.Set(sender())
+          }
           sender() ! Json.obj("type" -> CmdType.INIT, "payload" -> Json.toJson(set))
         case CmdType.TODO =>
           set += cmd.cmdUser
@@ -36,26 +41,43 @@ class MyActor extends Actor {
           sendCmd(cmd)
         case CmdType.LOGOUT =>
           context.unwatch(sender())
-          set -= cmd.cmdUser
-          map -= cmd.cmdUser
-          sendCmd(Cmd(CmdType.DONE, cmd.cmdUser))
+          map.get(cmd.cmdUser) match {
+            case Some(userSet) =>
+              if (userSet.size > 1)
+                map.update(cmd.cmdUser, userSet -= sender())
+              else {
+                set -= cmd.cmdUser
+                map -= cmd.cmdUser
+                sendCmd(Cmd(CmdType.DONE, cmd.cmdUser))
+              }
+            case None =>
+          }
         case _ => println
       }
     case Terminated(ref) =>
       map.keys
         .filter((user) => map(user) == ref)
         .foreach((user) => {
-          set -= user
-          map -= user
-          sendCmd(Cmd(CmdType.DONE, user))
+          map.get(user) match {
+            case Some(userSet) =>
+              if (userSet.size > 1)
+                map.update(user, userSet -= sender())
+              else {
+                set -= user
+                map -= user
+                sendCmd(Cmd(CmdType.DONE, user))
+              }
+            case None =>
+          }
         })
     case _ =>
   }
 
   def sendCmd(cmd: Cmd): Unit = {
-    map.foreach((user) => {
-      user._2 ! Json.obj("type" -> cmd.cmdType, "payload" -> cmd.cmdUser)
-    })
+    map.values.foreach((user) =>
+      user.foreach((ref) =>
+        ref ! Json.obj("type" -> cmd.cmdType, "payload" -> cmd.cmdUser))
+    )
   }
 }
 
