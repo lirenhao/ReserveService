@@ -56,7 +56,7 @@ class MyActor extends Actor {
       }
     case Terminated(ref) =>
       map.keys
-        .filter((user) => map(user) == ref)
+        .filter((user) => map(user).contains(ref))
         .foreach((user) => {
           map.get(user) match {
             case Some(userSet) =>
